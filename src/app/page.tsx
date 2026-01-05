@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import {
   Card,
   CardContent,
@@ -179,14 +180,26 @@ export default function Page() {
             </p>
           </div>
 
-          <Button
-            className="rounded-2xl"
-            onClick={openCreate}
-            disabled={!canUseApp}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Add Bill
-          </Button>
+          <div className="flex items-center gap-2">
+            <Link href="/dashboard" className="inline-flex">
+              <Button
+                variant="outline"
+                className="rounded-2xl text-foreground"
+                disabled={!canUseApp}
+              >
+                Dashboard
+              </Button>
+            </Link>
+
+            <Button
+              className="rounded-2xl"
+              onClick={openCreate}
+              disabled={!canUseApp}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Add Bill
+            </Button>
+          </div>
         </div>
 
         <Separator className="my-6" />
