@@ -17,7 +17,7 @@ async function getToken(user: { getIdToken: () => Promise<string> } | null) {
   return user.getIdToken();
 }
 
-export function useBills(enabled = true): UseQueryResult<Bill[]> {
+export function useBills(): UseQueryResult<Bill[]> {
   const { user } = useAuth();
 
   return useQuery<Bill[]>({
@@ -28,7 +28,7 @@ export function useBills(enabled = true): UseQueryResult<Bill[]> {
       const res = await apiFetch<ListBillsResponse>("/api/bills", { token });
       return res.data.map(billFromDTO);
     },
-    enabled,
+    enabled: Boolean(user),
   });
 }
 
@@ -93,6 +93,7 @@ export function useDeleteBill() {
     },
   });
 }
+
 
 export function useToggleBillPaid() {
   const qc = useQueryClient();
