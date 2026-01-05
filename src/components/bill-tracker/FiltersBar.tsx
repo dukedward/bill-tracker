@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import type { BillCategory } from "@/types/bill";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -19,6 +20,7 @@ export type BillsSort =
   | "amountAsc"
   | "nameAsc"
   | "nameDesc";
+export type BillsCategoryFilter = "all" | BillCategory;
 
 export function FiltersBar(props: {
   search: string;
@@ -26,6 +28,9 @@ export function FiltersBar(props: {
 
   status: BillsStatusFilter;
   onStatusChange: (v: BillsStatusFilter) => void;
+
+  category: BillsCategoryFilter;
+  onCategoryChange: (v: BillsCategoryFilter) => void;
 
   sort: BillsSort;
   onSortChange: (v: BillsSort) => void;
@@ -37,6 +42,8 @@ export function FiltersBar(props: {
     onSearchChange,
     status,
     onStatusChange,
+    category,
+    onCategoryChange,
     sort,
     onSortChange,
     className,
@@ -70,6 +77,24 @@ export function FiltersBar(props: {
             <SelectItem value="all">All</SelectItem>
             <SelectItem value="unpaid">Unpaid</SelectItem>
             <SelectItem value="paid">Paid</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={category}
+          onValueChange={(v) => onCategoryChange(v as BillsCategoryFilter)}
+        >
+          <SelectTrigger className="w-full rounded-2xl sm:w-50">
+            <SelectValue placeholder="Category" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All categories</SelectItem>
+            <SelectItem value="rent">Rent</SelectItem>
+            <SelectItem value="utilities">Utilities</SelectItem>
+            <SelectItem value="subscriptions">Subscriptions</SelectItem>
+            <SelectItem value="credit">Credit</SelectItem>
+            <SelectItem value="insurance">Insurance</SelectItem>
+            <SelectItem value="other">Other</SelectItem>
           </SelectContent>
         </Select>
 

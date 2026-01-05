@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+import type { Bill, BillCategory, BillFrequency } from "@/types/bill";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -9,7 +11,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -19,47 +20,43 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { Bill, BillFrequency } from "@/types/bill";
-
-const FREQUENCIES: BillFrequency[] = ["weekly", "monthly", "yearly", "once"];
-
-function toDateInputValue(d: Date) {
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-type BillFormValues = {
-  name: string;
-  amount: string; // keep as string for input
-  dueDate: string; // yyyy-mm-dd
-  frequency: BillFrequency;
-  isSubscription: boolean;
-  paid: boolean;
-};
-
-function defaultsFromBill(bill?: Bill | null): BillFormValues {
-  return {
-    name: bill?.name ?? "",
-    amount: bill ? String(bill.amount) : "",
-    dueDate: bill
-      ? toDateInputValue(bill.dueDate)
-      : toDateInputValue(new Date()),
-    frequency: bill?.frequency ?? "monthly",
-    isSubscription: bill?.isSubscription ?? false,
-    paid: bill?.paid ?? false,
-  };
-}
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 
 export type BillFormSubmit = (values: {
   name: string;
   amount: number;
   dueDate: Date;
   frequency: BillFrequency;
+  category: BillCategory;
   isSubscription: boolean;
   paid: boolean;
+  vendor?: string;
+  notes?: string;
 }) => void | Promise<void>;
+
+const CATEGORY_OPTIONS: { value: BillCategory; label: string }[] = [
+  { value: "rent", label: "Rent" },
+  { value: "utilities", label: "Utilities" },
+  { value: "subscriptions", label: "Subscriptions" },
+  { value: "credit", label: "Credit" },
+  { value: "insurance", label: "Insurance" },
+  { value: "other", label: "Other" },
+];
+
+const FREQ_OPTIONS: { value: BillFrequency; label: string }[] = [
+  { value: "weekly", label: "Weekly" },
+  { value: "monthly", label: "Monthly" },
+  { value: "yearly", label: "Yearly" },
+  { value: "once", label: "Once" },
+];
+
+function dateToInputValue(d: Date) {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
 
 export function BillFormDialog(props: {
   open: boolean;
@@ -78,170 +75,227 @@ export function BillFormDialog(props: {
     errorMessage,
   } = props;
 
-  const [form, setForm] = React.useState<BillFormValues>(() =>
-    defaultsFromBill(initialBill)
-  );
+  const isEdit = Boolean(initialBill?.id);
 
-  // Reset the form every time we open, and when switching which bill we're editing.
+  const [name, setName] = React.useState("");
+  const [amount, setAmount] = React.useState<number>(0);
+  const [dueDate, setDueDate] = React.useState<Date>(new Date());
+  const [frequency, setFrequency] = React.useState<BillFrequency>("monthly");
+  const [category, setCategory] = React.useState<BillCategory>("other");
+  const [isSubscription, setIsSubscription] = React.useState<boolean>(false);
+  const [paid, setPaid] = React.useState<boolean>(false);
+  const [vendor, setVendor] = React.useState<string>("");
+  const [notes, setNotes] = React.useState<string>("");
+
   React.useEffect(() => {
-    if (open) setForm(defaultsFromBill(initialBill));
-  }, [open, initialBill?.id]);
+    if (!open) return;
 
-  const title = initialBill ? "Edit bill" : "Add bill";
-  const desc = initialBill
-    ? "Update the bill details."
-    : "Create a new bill in your account.";
+    if (initialBill) {
+      setName(initialBill.name ?? "");
+      setAmount(Number(initialBill.amount ?? 0));
+      setDueDate(
+        initialBill.dueDate instanceof Date
+          ? initialBill.dueDate
+          : new Date(initialBill.dueDate)
+      );
+      setFrequency(initialBill.frequency ?? "monthly");
+      setCategory(initialBill.category ?? "other");
+      setIsSubscription(Boolean(initialBill.isSubscription));
+      setPaid(Boolean(initialBill.paid));
+      setVendor(initialBill.vendor ?? "");
+      setNotes(initialBill.notes ?? "");
+    } else {
+      setName("");
+      setAmount(0);
+      setDueDate(new Date());
+      setFrequency("monthly");
+      setCategory("other");
+      setIsSubscription(false);
+      setPaid(false);
+      setVendor("");
+      setNotes("");
+    }
+  }, [open, initialBill]);
 
   const canSubmit =
-    form.name.trim().length > 0 &&
-    form.amount.trim().length > 0 &&
-    !Number.isNaN(Number(form.amount)) &&
-    Number(form.amount) >= 0 &&
-    form.dueDate.trim().length === 10;
+    name.trim().length > 0 &&
+    Number.isFinite(amount) &&
+    amount >= 0 &&
+    dueDate instanceof Date &&
+    !Number.isNaN(dueDate.getTime());
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!canSubmit) return;
-
-    const due = new Date(form.dueDate + "T00:00:00");
-    const amt = Number(form.amount);
+    if (!canSubmit || isSubmitting) return;
 
     await onSubmit({
-      name: form.name.trim(),
-      amount: amt,
-      dueDate: due,
-      frequency: form.frequency,
-      isSubscription: form.isSubscription,
-      paid: form.paid,
+      name: name.trim(),
+      amount: Number(amount),
+      dueDate,
+      frequency,
+      category,
+      isSubscription,
+      paid,
+      vendor: vendor.trim(),
+      notes: notes.trim(),
     });
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-135">
+      <DialogContent className="rounded-3xl sm:max-w-lg bg-background text-foreground">
         <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{desc}</DialogDescription>
+          <DialogTitle className="text-xl">
+            {isEdit ? "Edit bill" : "Add bill"}
+          </DialogTitle>
+          <DialogDescription className="text-muted-foreground">
+            Fill in the details for this bill.
+          </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="grid gap-4">
-          <div className="grid gap-2">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
             <Label htmlFor="bill-name">Name</Label>
             <Input
               id="bill-name"
-              value={form.name}
-              onChange={(e) => setForm((s) => ({ ...s, name: e.target.value }))}
-              placeholder="Rent, Netflix, Electric..."
               className="rounded-2xl"
-              disabled={isSubmitting}
-              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Rent, Electric, Netflix…"
             />
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="grid gap-2">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
               <Label htmlFor="bill-amount">Amount</Label>
               <Input
                 id="bill-amount"
-                type="number"
-                inputMode="decimal"
-                value={form.amount}
-                onChange={(e) =>
-                  setForm((s) => ({ ...s, amount: e.target.value }))
-                }
-                placeholder="0.00"
                 className="rounded-2xl"
-                disabled={isSubmitting}
-                min={0}
+                type="number"
                 step="0.01"
+                value={Number.isFinite(amount) ? amount : 0}
+                onChange={(e) => setAmount(Number(e.target.value))}
+                placeholder="0.00"
               />
             </div>
 
-            <div className="grid gap-2">
+            <div className="space-y-2">
               <Label htmlFor="bill-due">Due date</Label>
               <Input
                 id="bill-due"
-                type="date"
-                value={form.dueDate}
-                onChange={(e) =>
-                  setForm((s) => ({ ...s, dueDate: e.target.value }))
-                }
                 className="rounded-2xl"
-                disabled={isSubmitting}
+                type="date"
+                value={dateToInputValue(dueDate)}
+                onChange={(e) => setDueDate(new Date(e.target.value))}
               />
             </div>
           </div>
 
-          <div className="grid gap-2">
-            <Label>Frequency</Label>
-            <Select
-              value={form.frequency}
-              onValueChange={(v) =>
-                setForm((s) => ({ ...s, frequency: v as BillFrequency }))
-              }
-              disabled={isSubmitting}
-            >
-              <SelectTrigger className="rounded-2xl">
-                <SelectValue placeholder="Select frequency" />
-              </SelectTrigger>
-              <SelectContent>
-                {FREQUENCIES.map((f) => (
-                  <SelectItem key={f} value={f}>
-                    {f}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Frequency</Label>
+              <Select
+                value={frequency}
+                onValueChange={(v) => setFrequency(v as BillFrequency)}
+              >
+                <SelectTrigger className="rounded-2xl w-full">
+                  <SelectValue placeholder="Select frequency" />
+                </SelectTrigger>
+                <SelectContent>
+                  {FREQ_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Category</Label>
+              <Select
+                value={category}
+                onValueChange={(v) => setCategory(v as BillCategory)}
+              >
+                <SelectTrigger className="rounded-2xl w-full">
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {CATEGORY_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <label className="flex items-center gap-2 text-sm text-slate-200">
-              <input
-                type="checkbox"
-                checked={form.isSubscription}
-                onChange={(e) =>
-                  setForm((s) => ({ ...s, isSubscription: e.target.checked }))
-                }
-                disabled={isSubmitting}
-                className="h-4 w-4 accent-white/80"
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="flex items-center justify-between rounded-2xl border border-input bg-background px-3 py-2 text-foreground">
+              <div>
+                <div className="text-sm font-medium">Subscription</div>
+                <div className="text-xs">Recurring service/plan</div>
+              </div>
+              <Switch
+                checked={isSubscription}
+                onCheckedChange={(v) => setIsSubscription(Boolean(v))}
               />
-              Subscription
-            </label>
+            </div>
 
-            <label className="flex items-center gap-2 text-sm text-slate-200">
-              <input
-                type="checkbox"
-                checked={form.paid}
-                onChange={(e) =>
-                  setForm((s) => ({ ...s, paid: e.target.checked }))
-                }
-                disabled={isSubmitting}
-                className="h-4 w-4 accent-white/80"
+            <div className="flex items-center justify-between rounded-2xl border border-input bg-background px-3 py-2 text-foreground">
+              <div>
+                <div className="text-sm font-medium">Paid</div>
+                <div className="text-xs">Mark this bill as paid</div>
+              </div>
+              <Switch
+                checked={paid}
+                onCheckedChange={(v) => setPaid(Boolean(v))}
               />
-              Mark as paid
-            </label>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="bill-vendor">Vendor</Label>
+            <Input
+              id="bill-vendor"
+              className="rounded-2xl"
+              value={vendor}
+              onChange={(e) => setVendor(e.target.value)}
+              placeholder="Landlord, Duke Energy, Netflix…"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="bill-notes">Notes</Label>
+            <Textarea
+              id="bill-notes"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Optional notes…"
+              className="bg-input"
+            />
           </div>
 
           {errorMessage ? (
-            <div className="text-sm text-red-400">{errorMessage}</div>
+            <div className="text-sm text-destructive">{errorMessage}</div>
           ) : null}
 
-          <DialogFooter className="pt-2">
+          <DialogFooter className="gap-2">
             <Button
               type="button"
               variant="outline"
               className="rounded-2xl"
               onClick={() => onOpenChange(false)}
-              disabled={isSubmitting}
             >
               Cancel
             </Button>
             <Button
               type="submit"
               className="rounded-2xl"
-              disabled={!canSubmit || isSubmitting}
+              disabled={!canSubmit || Boolean(isSubmitting)}
             >
-              {initialBill ? "Save changes" : "Add bill"}
+              {isEdit ? "Save changes" : "Create bill"}
             </Button>
           </DialogFooter>
         </form>

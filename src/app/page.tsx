@@ -20,7 +20,7 @@ import {
   useDeleteBill,
   useToggleBillPaid,
 } from "@/components/bill-tracker/hooks";
-import type { Bill } from "@/types/bill";
+import type { Bill, BillCategory } from "@/types/bill";
 import { billToCreateDTO, billToUpdateDTO } from "@/types/bill";
 import { BillFormDialog } from "@/components/bill-tracker/BillFormDialog";
 import { SummaryCards } from "@/components/bill-tracker/SummaryCards";
@@ -28,13 +28,15 @@ import {
   FiltersBar,
   type BillsSort,
   type BillsStatusFilter,
+  type BillsCategoryFilter,
 } from "@/components/bill-tracker/FiltersBar";
 import { BillsTable } from "@/components/bill-tracker/BillsTable";
 
 function applyFilters(
   bills: Bill[],
   search: string,
-  status: BillsStatusFilter
+  status: BillsStatusFilter,
+  category: BillsCategoryFilter
 ): Bill[] {
   const s = search.trim().toLowerCase();
 
@@ -42,8 +44,11 @@ function applyFilters(
     if (status === "paid" && !b.paid) return false;
     if (status === "unpaid" && b.paid) return false;
 
+    if (category !== "all" && b.category !== category) return false;
+
     if (!s) return true;
-    return b.name.toLowerCase().includes(s);
+    const q = `${b.name} ${b.vendor ?? ""}`.toLowerCase();
+    return q.includes(s);
   });
 }
 
@@ -93,15 +98,16 @@ export default function Page() {
 
   const [search, setSearch] = React.useState("");
   const [status, setStatus] = React.useState<BillsStatusFilter>("all");
+  const [category, setCategory] = React.useState<BillsCategoryFilter>("all");
   const [sort, setSort] = React.useState<BillsSort>("dueDateAsc");
 
   const [togglingId, setTogglingId] = React.useState<string | null>(null);
 
   const bills = billsQ.data ?? [];
   const filteredSortedBills = React.useMemo(() => {
-    const filtered = applyFilters(bills, search, status);
+    const filtered = applyFilters(bills, search, status, category);
     return applySort(filtered, sort);
-  }, [bills, search, status, sort]);
+  }, [bills, search, status, category, sort]);
 
   function openCreate() {
     setEditing(null);
@@ -120,8 +126,11 @@ export default function Page() {
     amount: number;
     dueDate: Date;
     frequency: Bill["frequency"];
+    category: BillCategory;
     isSubscription: boolean;
     paid: boolean;
+    vendor?: string;
+    notes?: string;
   }) {
     if (!canUseApp) return;
 
@@ -213,6 +222,8 @@ export default function Page() {
                   onSearchChange={setSearch}
                   status={status}
                   onStatusChange={setStatus}
+                  category={category}
+                  onCategoryChange={setCategory}
                   sort={sort}
                   onSortChange={setSort}
                 />
