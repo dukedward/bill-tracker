@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Timestamp } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { requireUser } from "@/lib/requireUser";
-import type { BillDTO, CreateBillDTO } from "@/types/bill";
-import { Timestamp } from "firebase-admin/firestore";
+import type { BillDTO } from "@/types/bill";
+import { CreateBillSchema, zodErrorToResponse } from "@/lib/validators/bills";
 
 export const runtime = "nodejs";
 
@@ -28,46 +29,52 @@ function billDocToDTO(id: string, data: FirebaseFirestore.DocumentData): BillDTO
 }
 
 export async function GET(req: NextRequest) {
-  const { uid } = await requireUser(req);
-  const db = adminDb();
+  try {
+    const { uid } = await requireUser(req);
+    const db = adminDb();
 
-  const snap = await db.collection("users").doc(uid).collection("bills").orderBy("dueDate", "asc").get();
-  const data = snap.docs.map((d) => billDocToDTO(d.id, d.data()));
+    const snap = await db
+      .collection("users")
+      .doc(uid)
+      .collection("bills")
+      .orderBy("dueDate", "asc")
+      .get();
 
-  return NextResponse.json({ data });
+    const data = snap.docs.map((d) => billDocToDTO(d.id, d.data()));
+    return NextResponse.json({ data });
+  } catch (e: any) {
+    if (e instanceof Response) return e;
+    return NextResponse.json({ error: e?.message || "Server error" }, { status: 500 });
+  }
 }
 
 export async function POST(req: NextRequest) {
-  const { uid } = await requireUser(req);
-  const db = adminDb();
+  try {
+    const { uid } = await requireUser(req);
 
-  const body = (await req.json().catch(() => null)) as CreateBillDTO | null;
-  if (!body) {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-  }
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
 
-  const name = String(body.name ?? "").trim();
-  const amount = Number(body.amount);
-  const frequency = body.frequency;
-  const dueDateIso = String(body.dueDate ?? "");
-  const isSubscription = Boolean(body.isSubscription);
-  const paid = Boolean(body.paid);
+    const parsed = CreateBillSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(zodErrorToResponse(parsed.error), { status: 400 });
+    }
 
-  if (!name) return NextResponse.json({ error: "name is required" }, { status: 400 });
-  if (!Number.isFinite(amount) || amount < 0)
-    return NextResponse.json({ error: "amount must be a non-negative number" }, { status: 400 });
+    const { name, amount, dueDate: dueDateStr, frequency, isSubscription, paid } = parsed.data;
 
-  const dueDate = new Date(dueDateIso);
-  if (Number.isNaN(dueDate.getTime()))
-    return NextResponse.json({ error: "dueDate must be an ISO date string" }, { status: 400 });
+    const dueDate = new Date(dueDateStr);
+    if (Number.isNaN(dueDate.getTime())) {
+      return NextResponse.json({ error: "Invalid dueDate" }, { status: 400 });
+    }
 
-  const now = Timestamp.now();
+    const db = adminDb();
+    const now = Timestamp.now();
 
-  const ref = await db
-    .collection("users")
-    .doc(uid)
-    .collection("bills")
-    .add({
+    const ref = await db.collection("users").doc(uid).collection("bills").add({
       name,
       amount,
       dueDate: Timestamp.fromDate(dueDate),
@@ -78,8 +85,11 @@ export async function POST(req: NextRequest) {
       updatedAt: now,
     });
 
-  const created = await ref.get();
-  const dto = billDocToDTO(created.id, created.data() || {});
-
-  return NextResponse.json({ data: dto }, { status: 201 });
+    const created = await ref.get();
+    const dto = billDocToDTO(created.id, created.data() || {});
+    return NextResponse.json({ data: dto }, { status: 201 });
+  } catch (e: any) {
+    if (e instanceof Response) return e;
+    return NextResponse.json({ error: e?.message || "Server error" }, { status: 500 });
+  }
 }

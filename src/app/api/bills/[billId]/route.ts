@@ -1,104 +1,133 @@
-// src/app/api/bills/[billId]/route.ts
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
+import { Timestamp } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { requireUser } from "@/lib/requireUser";
-import { billToUpdateDTO, type UpdateBillDTO } from "@/types/bill";
-import { Timestamp } from "firebase-admin/firestore";
+import type { BillDTO, UpdateBillDTO } from "@/types/bill";
+import { UpdateBillSchema, zodErrorToResponse } from "@/lib/validators/bills";
 
-type RouteContext = {
-  params: Promise<{ billId: string }>;
-};
+export const runtime = "nodejs";
 
-function toTimestampIfDateLike(v: unknown) {
-  if (!v) return undefined;
+type RouteContext = { params: Promise<{ billId: string }> };
 
-  // If client sent ISO string
-  if (typeof v === "string") {
-    const d = new Date(v);
-    if (!Number.isNaN(d.getTime())) return Timestamp.fromDate(d);
-  }
+function billDocToDTO(id: string, data: FirebaseFirestore.DocumentData): BillDTO {
+  const dueDate: Date =
+    data.dueDate?.toDate?.() instanceof Date ? data.dueDate.toDate() : new Date(data.dueDate);
 
-  // If client sent Date (unlikely over JSON, but safe)
-  if (v instanceof Date && !Number.isNaN(v.getTime())) {
-    return Timestamp.fromDate(v);
-  }
+  const createdAt: Date | undefined =
+    data.createdAt?.toDate?.() instanceof Date ? data.createdAt.toDate() : undefined;
 
-  return undefined;
+  const updatedAt: Date | undefined =
+    data.updatedAt?.toDate?.() instanceof Date ? data.updatedAt.toDate() : undefined;
+
+  return {
+    id,
+    name: String(data.name ?? ""),
+    amount: Number(data.amount ?? 0),
+    dueDate: dueDate.toISOString(),
+    frequency: data.frequency,
+    isSubscription: Boolean(data.isSubscription),
+    paid: Boolean(data.paid),
+    createdAt: createdAt?.toISOString(),
+    updatedAt: updatedAt?.toISOString(),
+  };
 }
 
-export async function GET(_req: Request, ctx: RouteContext) {
-  const { uid } = await requireUser(_req);
-  const { billId } = await ctx.params;
+export async function GET(req: NextRequest, ctx: RouteContext) {
+  try {
+    const { uid } = await requireUser(req);
+    const { billId } = await ctx.params;
 
-  if (!billId) {
-    return NextResponse.json({ error: "Missing billId" }, { status: 400 });
+    if (!billId) return NextResponse.json({ error: "Missing billId" }, { status: 400 });
+
+    const db = adminDb();
+    const ref = db.collection("users").doc(uid).collection("bills").doc(billId);
+
+    const snap = await ref.get();
+    if (!snap.exists) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    return NextResponse.json({ data: billDocToDTO(snap.id, snap.data() || {}) });
+  } catch (e: any) {
+    if (e instanceof Response) return e;
+    return NextResponse.json({ error: e?.message || "Server error" }, { status: 500 });
   }
-
-  const db = adminDb();
-  const ref = db.collection("users").doc(uid).collection("bills").doc(billId);
-  const snap = await ref.get();
-
-  if (!snap.exists) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-
-  return NextResponse.json({ data: billToUpdateDTO(snap.id, snap.data()!) });
 }
 
-export async function PATCH(req: Request, ctx: RouteContext) {
-  const { uid } = await requireUser(req);
-  const { billId } = await ctx.params;
+export async function PATCH(req: NextRequest, ctx: RouteContext) {
+  try {
+    const { uid } = await requireUser(req);
+    const { billId } = await ctx.params;
 
-  if (!billId) {
-    return NextResponse.json({ error: "Missing billId" }, { status: 400 });
+    if (!billId) return NextResponse.json({ error: "Missing billId" }, { status: 400 });
+
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+
+    const parsed = UpdateBillSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(zodErrorToResponse(parsed.error), { status: 400 });
+    }
+
+    const patch = parsed.data as UpdateBillDTO;
+    const updates: Record<string, any> = { updatedAt: Timestamp.now() };
+
+    if (patch.name !== undefined) updates.name = String(patch.name).trim();
+    if (patch.frequency !== undefined) updates.frequency = patch.frequency;
+    if (patch.isSubscription !== undefined) updates.isSubscription = Boolean(patch.isSubscription);
+    if (patch.paid !== undefined) updates.paid = Boolean(patch.paid);
+
+    if (patch.amount !== undefined) {
+      const n = Number(patch.amount);
+      if (Number.isNaN(n) || !Number.isFinite(n)) {
+        return NextResponse.json({ error: "Invalid amount" }, { status: 400 });
+      }
+      updates.amount = n;
+    }
+
+    if ((patch as any).dueDate !== undefined) {
+      const d = new Date((patch as any).dueDate);
+      if (Number.isNaN(d.getTime())) {
+        return NextResponse.json({ error: "Invalid dueDate" }, { status: 400 });
+      }
+      updates.dueDate = Timestamp.fromDate(d);
+    }
+
+    const db = adminDb();
+    const ref = db.collection("users").doc(uid).collection("bills").doc(billId);
+
+    const snap = await ref.get();
+    if (!snap.exists) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    await ref.update(updates);
+
+    const fresh = await ref.get();
+    return NextResponse.json({ data: billDocToDTO(fresh.id, fresh.data() || {}) });
+  } catch (e: any) {
+    if (e instanceof Response) return e;
+    return NextResponse.json({ error: e?.message || "Server error" }, { status: 500 });
   }
-
-  const patch = (await req.json()) as UpdateBillDTO;
-
-  // Build safe update object (only allow known fields)
-  const updates: Record<string, any> = { updatedAt: Timestamp.now() };
-
-  if (typeof patch.name === "string") updates.name = patch.name.trim();
-  if (typeof patch.frequency === "string") updates.frequency = patch.frequency;
-  if (typeof patch.isSubscription === "boolean") updates.isSubscription = patch.isSubscription;
-  if (typeof patch.paid === "boolean") updates.paid = patch.paid;
-
-  if (patch.amount !== undefined && patch.amount !== null) {
-    const n = Number(patch.amount);
-    if (!Number.isNaN(n)) updates.amount = n;
-  }
-
-  // dueDate expected as ISO string from client DTO
-  const ts = toTimestampIfDateLike((patch as any).dueDate);
-  if (ts) updates.dueDate = ts;
-
-  const db = adminDb();
-  const ref = db.collection("users").doc(uid).collection("bills").doc(billId);
-
-  const snap = await ref.get();
-  if (!snap.exists) return NextResponse.json({ error: "Not found" }, { status: 404 });
-
-  await ref.update(updates);
-
-  const fresh = await ref.get();
-  return NextResponse.json({ data: billToUpdateDTO(fresh.id, fresh.data()!) });
 }
 
-export async function DELETE(req: Request, ctx: RouteContext) {
-  const { uid } = await requireUser(req);
-  const { billId } = await ctx.params;
+export async function DELETE(req: NextRequest, ctx: RouteContext) {
+  try {
+    const { uid } = await requireUser(req);
+    const { billId } = await ctx.params;
 
-  if (!billId) {
-    return NextResponse.json({ error: "Missing billId" }, { status: 400 });
+    if (!billId) return NextResponse.json({ error: "Missing billId" }, { status: 400 });
+
+    const db = adminDb();
+    const ref = db.collection("users").doc(uid).collection("bills").doc(billId);
+
+    const snap = await ref.get();
+    if (!snap.exists) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    await ref.delete();
+    return NextResponse.json({ ok: true });
+  } catch (e: any) {
+    if (e instanceof Response) return e;
+    return NextResponse.json({ error: e?.message || "Server error" }, { status: 500 });
   }
-
-  const db = adminDb();
-  const ref = db.collection("users").doc(uid).collection("bills").doc(billId);
-
-  const snap = await ref.get();
-  if (!snap.exists) return NextResponse.json({ error: "Not found" }, { status: 404 });
-
-  await ref.delete();
-
-  return NextResponse.json({ ok: true });
 }
