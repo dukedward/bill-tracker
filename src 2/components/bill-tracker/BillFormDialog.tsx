@@ -121,12 +121,11 @@ export function BillFormDialog(props: {
     }
   }, [open, initialBill]);
 
-  const amountTrimmed = amount.trim();
-  const amountNumber = amountTrimmed === "" ? NaN : Number(amountTrimmed);
+  const amountNumber = Number(amount);
 
   const canSubmit =
     name.trim().length > 0 &&
-    Number.isFinite(amountNumber) &&
+    Number.isFinite(amount) &&
     amountNumber >= 0 &&
     dueDate instanceof Date &&
     !Number.isNaN(dueDate.getTime());
