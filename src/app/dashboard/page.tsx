@@ -28,9 +28,18 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
+  Cell,
   LineChart,
   Line,
 } from "recharts";
+import {
+  PAID_UNPAID_COLORS,
+  CATEGORY_COLORS,
+  CHART_GRID_COLOR,
+  CHART_TEXT_COLOR,
+  BAR_COLOR,
+  LINE_COLOR,
+} from "@/lib/chartColors";
 
 function startOfDay(d: Date) {
   const x = new Date(d);
@@ -260,7 +269,7 @@ export default function DashboardPage() {
                     Count of bills by payment status.
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="h-[320px]">
+                <CardContent className="h-80">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
@@ -270,7 +279,18 @@ export default function DashboardPage() {
                         cy="50%"
                         outerRadius={95}
                         label
-                      />
+                      >
+                        {paidData.map((entry) => (
+                          <Cell
+                            key={entry.name}
+                            fill={
+                              entry.name === "Paid"
+                                ? PAID_UNPAID_COLORS.paid
+                                : PAID_UNPAID_COLORS.unpaid
+                            }
+                          />
+                        ))}
+                      </Pie>
                       <Tooltip />
                       <Legend />
                     </PieChart>
@@ -285,7 +305,7 @@ export default function DashboardPage() {
                     Total amount grouped by category.
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="h-[320px]">
+                <CardContent className="h-80">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
@@ -294,8 +314,15 @@ export default function DashboardPage() {
                         cx="50%"
                         cy="50%"
                         outerRadius={95}
-                        label
-                      />
+                        label={({ value }) => fmtCurrency(Number(value) || 0)}
+                      >
+                        {categoryData.map((entry) => (
+                          <Cell
+                            key={entry.name}
+                            fill={CATEGORY_COLORS[entry.name] ?? "#64748b"}
+                          />
+                        ))}
+                      </Pie>
                       <Tooltip
                         formatter={(v: any) => fmtCurrency(Number(v) || 0)}
                       />
@@ -312,16 +339,32 @@ export default function DashboardPage() {
                     Totals grouped by week start.
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="h-[320px]">
+                <CardContent className="h-80">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={weeklyUpcoming}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="week" />
-                      <YAxis tickFormatter={(v) => `$${v}`} />
+                      <CartesianGrid
+                        stroke={CHART_GRID_COLOR}
+                        strokeDasharray="3 3"
+                      />
+                      <XAxis dataKey="week" stroke={CHART_TEXT_COLOR} />
+                      <YAxis
+                        tickFormatter={(v) => `$${v}`}
+                        stroke={CHART_TEXT_COLOR}
+                      />
                       <Tooltip
                         formatter={(v: any) => fmtCurrency(Number(v) || 0)}
+                        contentStyle={{
+                          backgroundColor: "#020617",
+                          border: "1px solid #334155",
+                          borderRadius: "12px",
+                          color: CHART_TEXT_COLOR,
+                        }}
                       />
-                      <Bar dataKey="total" />
+                      <Bar
+                        dataKey="total"
+                        fill={BAR_COLOR}
+                        radius={[6, 6, 0, 0]}
+                      />
                     </BarChart>
                   </ResponsiveContainer>
                 </CardContent>
@@ -332,7 +375,7 @@ export default function DashboardPage() {
                   <CardTitle>Monthly totals (Last 6 months)</CardTitle>
                   <CardDescription>Based on bill due dates.</CardDescription>
                 </CardHeader>
-                <CardContent className="h-[320px]">
+                <CardContent className="h-80">
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={monthlyTotals}>
                       <CartesianGrid strokeDasharray="3 3" />

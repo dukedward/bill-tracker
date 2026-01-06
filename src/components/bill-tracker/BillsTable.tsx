@@ -23,6 +23,23 @@ function startOfDay(d: Date) {
   return x;
 }
 
+function categoryLabel(cat: Bill["category"]) {
+  switch (cat) {
+    case "rent":
+      return "Rent";
+    case "utilities":
+      return "Utilities";
+    case "subscriptions":
+      return "Subscriptions";
+    case "credit":
+      return "Credit";
+    case "insurance":
+      return "Insurance";
+    default:
+      return "Other";
+  }
+}
+
 export function BillsTable(props: {
   bills: Bill[];
   onEdit: (b: Bill) => void;
@@ -65,6 +82,8 @@ export function BillsTable(props: {
             <TableHead>Amount</TableHead>
             <TableHead>Due</TableHead>
             <TableHead>Frequency</TableHead>
+            <TableHead>Category</TableHead>
+            <TableHead>Vendor</TableHead>
             <TableHead>Subscription</TableHead>
             <TableHead>Paid</TableHead>
             <TableHead className="text-right">Actions</TableHead>
@@ -89,7 +108,7 @@ export function BillsTable(props: {
 
                 <TableCell
                   className={cn(
-                    overdue && "text-red-400",
+                    overdue && "text-destructive",
                     b.paid && "line-through"
                   )}
                 >
@@ -101,6 +120,21 @@ export function BillsTable(props: {
 
                 <TableCell className={cn(b.paid && "line-through")}>
                   {b.frequency}
+                </TableCell>
+
+                <TableCell>
+                  <Badge variant="secondary">{categoryLabel(b.category)}</Badge>
+                </TableCell>
+
+                <TableCell
+                  className={cn("max-w-55 truncate", b.paid && "line-through")}
+                  title={b.vendor || ""}
+                >
+                  {b.vendor ? (
+                    b.vendor
+                  ) : (
+                    <span className="text-slate-500">—</span>
+                  )}
                 </TableCell>
 
                 <TableCell>
