@@ -15,7 +15,6 @@ export const BillCategorySchema = z.enum([
   "other",
 ]);
 
-// Base fields — NO defaults here (important for PATCH)
 const BillFieldsSchema = z.object({
   name: z
     .string()
@@ -23,7 +22,6 @@ const BillFieldsSchema = z.object({
     .min(1, "Name is required")
     .max(120, "Name is too long"),
 
-  // ✅ accept number OR numeric string
   amount: z.coerce.number().min(0, "Amount must be >= 0"),
 
   dueDate: z
@@ -37,7 +35,6 @@ const BillFieldsSchema = z.object({
   frequency: BillFrequencySchema,
   category: BillCategorySchema,
 
-  // ✅ accept boolean OR "true"/"false"
   isSubscription: z.coerce.boolean(),
   paid: z.coerce.boolean(),
 
@@ -45,7 +42,6 @@ const BillFieldsSchema = z.object({
   notes: z.string().trim().max(2000, "Notes are too long").optional(),
 });
 
-// CREATE — defaults are OK here
 export const CreateBillSchema = BillFieldsSchema.extend({
   category: BillCategorySchema.default("other"),
   vendor: z
@@ -62,7 +58,6 @@ export const CreateBillSchema = BillFieldsSchema.extend({
     .default(""),
 });
 
-// UPDATE — partial, and NO defaults (prevents wiping fields)
 export const UpdateBillSchema = BillFieldsSchema.partial().refine(
   (obj) => Object.keys(obj).length > 0,
   "At least one field must be provided"
