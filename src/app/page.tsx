@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus } from "lucide-react";
 
 import { useAuth } from "@/lib/useAuth";
@@ -21,9 +22,18 @@ import {
   useDeleteBill,
   useToggleBillPaid,
 } from "@/components/bill-tracker/hooks";
+import {
+  useIncome,
+  useCreateIncome,
+  useUpdateIncome,
+  useDeleteIncome,
+} from "@/components/income-tracker/hooks";
 import type { Bill, BillCategory } from "@/types/bill";
+import type { Income, IncomeFrequency } from "@/types/income";
 import { billToCreateDTO, billToUpdateDTO } from "@/types/bill";
+import { incomeToCreateDTO, incomeToUpdateDTO } from "@/types/income";
 import { BillFormDialog } from "@/components/bill-tracker/BillFormDialog";
+import { IncomeFormDialog } from "@/components/income-tracker/IncomeFormDialog";
 import { SummaryCards } from "@/components/bill-tracker/SummaryCards";
 import {
   FiltersBar,
@@ -32,6 +42,9 @@ import {
   type BillsCategoryFilter,
 } from "@/components/bill-tracker/FiltersBar";
 import { BillsTable } from "@/components/bill-tracker/BillsTable";
+import { IncomeTable } from "@/components/income-tracker/IncomeTable";
+import { IncomeFiltersBar } from "@/components/income-tracker/IncomeFiltersBar";
+import { FinancialSummaryCards } from "@/components/bill-tracker/FinancialSummaryCards";
 
 function applyFilters(
   bills: Bill[],
@@ -87,6 +100,11 @@ export default function Page() {
 
   const canUseApp = Boolean(user && !authLoading);
 
+  const incomeQ = useIncome(canUseApp);
+  const createIncomeM = useCreateIncome();
+  const updateIncomeM = useUpdateIncome();
+  const deleteIncomeM = useDeleteIncome();
+
   const billsQ = useBills(canUseApp);
   const createM = useCreateBill();
   const updateM = useUpdateBill();
@@ -97,6 +115,14 @@ export default function Page() {
   const [editing, setEditing] = React.useState<Bill | null>(null);
   const [dialogError, setDialogError] = React.useState<string | null>(null);
 
+  const [incomeDialogOpen, setIncomeDialogOpen] = React.useState(false);
+  const [incomeEditing, setIncomeEditing] = React.useState<Income | null>(null);
+  const [incomeDialogError, setIncomeDialogError] = React.useState<
+    string | null
+  >(null);
+
+  const [incomeSearch, setIncomeSearch] = React.useState("");
+
   const [search, setSearch] = React.useState("");
   const [status, setStatus] = React.useState<BillsStatusFilter>("all");
   const [category, setCategory] = React.useState<BillsCategoryFilter>("all");
@@ -105,10 +131,20 @@ export default function Page() {
   const [togglingId, setTogglingId] = React.useState<string | null>(null);
 
   const bills = billsQ.data ?? [];
+  const income = incomeQ.data ?? [];
   const filteredSortedBills = React.useMemo(() => {
     const filtered = applyFilters(bills, search, status, category);
     return applySort(filtered, sort);
   }, [bills, search, status, category, sort]);
+
+  const filteredIncome = React.useMemo(() => {
+    const s = incomeSearch.trim().toLowerCase();
+    if (!s) return income;
+    return income.filter((i) => {
+      const hay = `${i.name ?? ""} ${i.source ?? ""}`.toLowerCase();
+      return hay.includes(s);
+    });
+  }, [income, incomeSearch]);
 
   function openCreate() {
     setEditing(null);
@@ -120,6 +156,18 @@ export default function Page() {
     setEditing(b);
     setDialogError(null);
     setDialogOpen(true);
+  }
+
+  function openIncomeEdit(i: Income) {
+    setIncomeEditing(i);
+    setIncomeDialogError(null);
+    setIncomeDialogOpen(true);
+  }
+
+  function openIncomeNew() {
+    setIncomeEditing(null);
+    setIncomeDialogError(null);
+    setIncomeDialogOpen(true);
   }
 
   async function handleSubmit(values: {
@@ -153,6 +201,51 @@ export default function Page() {
     }
   }
 
+  async function handleIncomeSubmit(values: {
+    name: string;
+    amount: number;
+    date: Date;
+    frequency?: IncomeFrequency;
+    source?: string;
+    notes?: string;
+  }) {
+    setIncomeDialogError(null);
+
+    try {
+      if (incomeEditing?.id) {
+        const patch = incomeToUpdateDTO(values);
+        const keys = Object.keys(patch);
+        if (!keys.length) {
+          setIncomeDialogOpen(false);
+          setIncomeEditing(null);
+          return;
+        }
+        await updateIncomeM.mutateAsync({ id: incomeEditing.id, patch });
+      } else {
+        const dto = incomeToCreateDTO(values);
+        await createIncomeM.mutateAsync(dto);
+      }
+
+      setIncomeDialogOpen(false);
+      setIncomeEditing(null);
+    } catch (err) {
+      setIncomeDialogError(
+        err instanceof Error ? err.message : "Failed to save income",
+      );
+    }
+  }
+
+  async function handleIncomeDelete(id: string) {
+    setIncomeDialogError(null);
+    try {
+      await deleteIncomeM.mutateAsync(id);
+    } catch (err) {
+      setIncomeDialogError(
+        err instanceof Error ? err.message : "Failed to delete income",
+      );
+    }
+  }
+
   function handleDelete(id: string) {
     delM.mutate(id);
   }
@@ -169,7 +262,7 @@ export default function Page() {
 
   return (
     <div className="min-h-[calc(100vh-64px)] bg-background pt-4">
-      <div className="mx-auto w-full max-w-7xl px-4 py-10">
+      <div className="mx-auto w-full max-w-6xl px-4 py-10">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-3xl font-semibold tracking-tight text-foreground">
@@ -222,46 +315,115 @@ export default function Page() {
         ) : (
           <div className="space-y-6">
             <SummaryCards bills={bills} />
-            <Card className="rounded-3xl text-foreground">
-              <CardHeader>
-                <CardTitle className="text-2xl">Your bills</CardTitle>
-                <CardDescription>
-                  Search, add, edit, and delete bills.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <FiltersBar
-                  search={search}
-                  onSearchChange={setSearch}
-                  status={status}
-                  onStatusChange={setStatus}
-                  category={category}
-                  onCategoryChange={setCategory}
-                  sort={sort}
-                  onSortChange={setSort}
-                />
+            <FinancialSummaryCards bills={bills} income={income} />
 
-                {billsQ.isLoading ? (
-                  <div className="text-sm text-foreground">Loading bills…</div>
-                ) : billsQ.isError ? (
-                  <div className="text-sm text-destructive">
-                    Failed to load bills.
-                  </div>
-                ) : (
-                  <BillsTable
-                    bills={filteredSortedBills}
-                    onEdit={openEdit}
-                    onDelete={handleDelete}
-                    onTogglePaid={handleTogglePaid}
-                    isEditingOrDeleting={
-                      createM.isPending || updateM.isPending || delM.isPending
-                    }
-                    isToggling={togglePaidM.isPending}
-                    togglingId={togglingId}
-                  />
-                )}
-              </CardContent>
-            </Card>
+            <Tabs defaultValue="bills" className="space-y-6">
+              <TabsList>
+                <TabsTrigger value="bills">Bills</TabsTrigger>
+                <TabsTrigger value="income">Income</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="bills" className="space-y-6">
+                <Card className="rounded-3xl text-foreground">
+                  <CardHeader>
+                    <CardTitle className="text-2xl">Your bills</CardTitle>
+                    <CardDescription>
+                      Search, add, edit, and delete bills.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <FiltersBar
+                      search={search}
+                      onSearchChange={setSearch}
+                      status={status}
+                      onStatusChange={setStatus}
+                      category={category}
+                      onCategoryChange={setCategory}
+                      sort={sort}
+                      onSortChange={setSort}
+                    />
+
+                    {billsQ.isLoading ? (
+                      <div className="text-sm text-foreground">
+                        Loading bills…
+                      </div>
+                    ) : billsQ.isError ? (
+                      <div className="text-sm text-destructive">
+                        Failed to load bills.
+                      </div>
+                    ) : (
+                      <BillsTable
+                        bills={filteredSortedBills}
+                        onEdit={openEdit}
+                        onDelete={handleDelete}
+                        onTogglePaid={handleTogglePaid}
+                        isEditingOrDeleting={
+                          createM.isPending ||
+                          updateM.isPending ||
+                          delM.isPending
+                        }
+                        isToggling={togglePaidM.isPending}
+                        togglingId={togglingId}
+                      />
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="income" className="space-y-6">
+                <Card className="rounded-3xl text-foreground">
+                  <CardHeader className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <CardTitle className="text-2xl">Your income</CardTitle>
+                      <CardDescription>
+                        Add, search, edit, and delete income entries.
+                      </CardDescription>
+                    </div>
+                    <Button
+                      className="rounded-2xl"
+                      onClick={openIncomeNew}
+                      disabled={!canUseApp}
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add income
+                    </Button>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <IncomeFiltersBar
+                      search={incomeSearch}
+                      onSearchChange={setIncomeSearch}
+                    />
+
+                    {incomeDialogError ? (
+                      <div className="text-sm text-destructive">
+                        {incomeDialogError}
+                      </div>
+                    ) : null}
+
+                    {incomeQ.isLoading ? (
+                      <div className="text-sm text-foreground">
+                        Loading income…
+                      </div>
+                    ) : incomeQ.isError ? (
+                      <div className="text-sm text-destructive">
+                        Failed to load income.
+                      </div>
+                    ) : (
+                      <IncomeTable
+                        income={filteredIncome}
+                        onEdit={openIncomeEdit}
+                        onDelete={handleIncomeDelete}
+                        isEditingOrDeleting={
+                          createIncomeM.isPending ||
+                          updateIncomeM.isPending ||
+                          deleteIncomeM.isPending
+                        }
+                      />
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
           </div>
         )}
 
@@ -275,6 +437,18 @@ export default function Page() {
           onSubmit={handleSubmit}
           isSubmitting={createM.isPending || updateM.isPending}
           errorMessage={dialogError}
+        />
+
+        <IncomeFormDialog
+          open={incomeDialogOpen}
+          onOpenChange={(o) => {
+            setIncomeDialogOpen(o);
+            if (!o) setIncomeEditing(null);
+          }}
+          initialIncome={incomeEditing}
+          onSubmit={handleIncomeSubmit}
+          isSubmitting={createIncomeM.isPending || updateIncomeM.isPending}
+          errorMessage={incomeDialogError}
         />
       </div>
     </div>
