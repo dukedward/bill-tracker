@@ -37,7 +37,7 @@ function applyFilters(
   bills: Bill[],
   search: string,
   status: BillsStatusFilter,
-  category: BillsCategoryFilter
+  category: BillsCategoryFilter,
 ): Bill[] {
   const s = search.trim().toLowerCase();
 
@@ -163,13 +163,13 @@ export default function Page() {
       { id: b.id, paid: nextPaid },
       {
         onSettled: () => setTogglingId(null),
-      }
+      },
     );
   }
 
   return (
     <div className="min-h-[calc(100vh-64px)] bg-background pt-4">
-      <div className="mx-auto w-full max-w-6xl px-4 py-10">
+      <div className="mx-auto w-full max-w-7xl px-4 py-10">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-3xl font-semibold tracking-tight text-foreground">
