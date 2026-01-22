@@ -283,15 +283,6 @@ export default function Page() {
                 Dashboard
               </Button>
             </Link>
-
-            <Button
-              className="rounded-2xl"
-              onClick={openCreate}
-              disabled={!canUseApp}
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Add Bill
-            </Button>
           </div>
         </div>
 
@@ -325,11 +316,22 @@ export default function Page() {
 
               <TabsContent value="bills" className="space-y-6">
                 <Card className="rounded-3xl text-foreground">
-                  <CardHeader>
-                    <CardTitle className="text-2xl">Your bills</CardTitle>
-                    <CardDescription>
-                      Search, add, edit, and delete bills.
-                    </CardDescription>
+                  <CardHeader className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <CardTitle className="text-2xl">Your bills</CardTitle>
+                      <CardDescription>
+                        Search, add, edit, and delete bills.
+                      </CardDescription>
+                    </div>
+
+                    <Button
+                      className="rounded-2xl"
+                      onClick={openCreate}
+                      disabled={!canUseApp}
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add Bill
+                    </Button>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <FiltersBar

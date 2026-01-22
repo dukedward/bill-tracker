@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { fmtCurrency } from "@/components/bill-tracker/uiBits";
+import { monthRange } from "@/lib/date";
 import type { Bill } from "@/types/bill";
 import type { Income } from "@/types/income";
 import { cn } from "@/lib/utils";
@@ -13,15 +14,23 @@ export function FinancialSummaryCards(props: {
   className?: string;
 }) {
   const { bills, income, className } = props;
+  const { start, end } = monthRange(new Date());
+
+  const paidThisMonthTotal = bills
+    .filter((b) => b.paidAt && b.paidAt >= start && b.paidAt < end)
+    .reduce((sum, b) => sum + b.amount, 0);
 
   const totals = React.useMemo(() => {
-    const totalIncome = income.reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
+    const totalIncome = income.reduce(
+      (sum, i) => sum + (Number(i.amount) || 0),
+      0,
+    );
     const paidBillsTotal = bills
       .filter((b) => b.paid)
       .reduce((sum, b) => sum + (Number(b.amount) || 0), 0);
 
-    const remaining = totalIncome - paidBillsTotal;
-    return { totalIncome, paidBillsTotal, remaining };
+    const remaining = totalIncome - paidThisMonthTotal;
+    return { totalIncome, paidThisMonthTotal, remaining };
   }, [bills, income]);
 
   return (
@@ -44,7 +53,7 @@ export function FinancialSummaryCards(props: {
           </CardTitle>
         </CardHeader>
         <CardContent className="text-2xl font-semibold">
-          {fmtCurrency(totals.paidBillsTotal)}
+          {fmtCurrency(totals.paidThisMonthTotal)}
         </CardContent>
       </Card>
 
@@ -54,7 +63,12 @@ export function FinancialSummaryCards(props: {
             Remaining income
           </CardTitle>
         </CardHeader>
-        <CardContent className={cn("text-2xl font-semibold", totals.remaining < 0 && "text-destructive")}>
+        <CardContent
+          className={cn(
+            "text-2xl font-semibold",
+            totals.remaining < 0 && "text-destructive",
+          )}
+        >
           {fmtCurrency(totals.remaining)}
         </CardContent>
       </Card>

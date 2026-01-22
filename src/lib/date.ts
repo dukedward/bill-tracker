@@ -2,7 +2,7 @@ import { BillFrequency } from "@/types/bill";
 
 export const calculateNextDueDate = (
   current: Date,
-  frequency: BillFrequency
+  frequency: BillFrequency,
 ): Date => {
   const next = new Date(current);
 
@@ -28,4 +28,10 @@ export function formatDueDate(dueDate: Date): string {
     month: "short",
     day: "2-digit",
   });
+}
+
+export function monthRange(d = new Date()) {
+  const start = new Date(d.getFullYear(), d.getMonth(), 1);
+  const end = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+  return { start, end };
 }

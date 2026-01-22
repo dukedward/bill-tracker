@@ -19,6 +19,7 @@ export interface Bill {
   category: BillCategory;
   isSubscription: boolean;
   paid: boolean;
+  paidAt?: Date | null;
   vendor?: string;
   notes?: string;
   createdAt?: Date;
@@ -37,6 +38,7 @@ export interface BillDTO {
   category: BillCategory;
   isSubscription: boolean;
   paid: boolean;
+  paidAt?: string | null;
   vendor?: string;
   notes?: string;
   createdAt?: string;
@@ -56,6 +58,7 @@ export function billFromDTO(dto: BillDTO): Bill {
     category: dto.category ?? "other",
     isSubscription: dto.isSubscription,
     paid: dto.paid,
+    paidAt: dto.paidAt ? new Date(dto.paidAt) : null,
     vendor: dto.vendor ?? "",
     notes: dto.notes ?? "",
     createdAt: dto.createdAt ? new Date(dto.createdAt) : undefined,
@@ -82,6 +85,7 @@ export function billToCreateDTO(input: {
     category: input.category,
     isSubscription: input.isSubscription,
     paid: input.paid,
+    paidAt: input.paid ? new Date().toISOString() : null,
     vendor: input.vendor ?? "",
     notes: input.notes ?? "",
   };
@@ -98,13 +102,19 @@ export function billToUpdateDTO(
     paid: boolean;
     vendor?: string;
     notes?: string;
-  }>
+  }>,
 ): UpdateBillDTO {
   const out: UpdateBillDTO = { ...input } as UpdateBillDTO;
-  if (input.dueDate instanceof Date) {
-    out.dueDate = input.dueDate.toISOString();
-  }
+
+  if (input.dueDate instanceof Date) out.dueDate = input.dueDate.toISOString();
   if (input.vendor !== undefined) out.vendor = input.vendor ?? "";
   if (input.notes !== undefined) out.notes = input.notes ?? "";
+
+  // ✅ add paidAt logic
+  if (input.paid !== undefined) {
+    out.paid = input.paid;
+    out.paidAt = input.paid ? new Date().toISOString() : null;
+  }
+
   return out;
 }

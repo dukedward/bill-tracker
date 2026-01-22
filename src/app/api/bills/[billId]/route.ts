@@ -15,7 +15,7 @@ type RouteContext = { params: Promise<{ billId: string }> };
 
 function billDocToDTO(
   id: string,
-  data: FirebaseFirestore.DocumentData
+  data: FirebaseFirestore.DocumentData,
 ): BillDTO {
   const dueDate: Date =
     data.dueDate?.toDate?.() instanceof Date
@@ -43,6 +43,11 @@ function billDocToDTO(
     category,
     isSubscription: Boolean(data.isSubscription),
     paid: Boolean(data.paid),
+    paidAt: data.paidAt
+      ? data.paidAt.toDate?.()
+        ? data.paidAt.toDate().toISOString()
+        : new Date(data.paidAt).toISOString()
+      : null,
     vendor: typeof data.vendor === "string" ? data.vendor : "",
     notes: typeof data.notes === "string" ? data.notes : "",
     createdAt: createdAt?.toISOString(),
@@ -72,7 +77,7 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     if (e instanceof Response) return e;
     return NextResponse.json(
       { error: e?.message || "Server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -104,9 +109,14 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
     if (patch.category !== undefined) updates.category = patch.category;
     if (patch.isSubscription !== undefined)
       updates.isSubscription = patch.isSubscription;
-    if (patch.paid !== undefined) updates.paid = patch.paid;
-    if (patch.vendor !== undefined) updates.vendor = patch.vendor;
-    if (patch.notes !== undefined) updates.notes = patch.notes ?? "";
+    if (patch.paid !== undefined) {
+      const nextPaid = Boolean(patch.paid);
+      updates.paid = nextPaid;
+      updates.paidAt = nextPaid ? Timestamp.now() : null;
+    }
+    if (patch.vendor !== undefined)
+      updates.vendor = (patch.vendor ?? "").trim();
+    if (patch.notes !== undefined) updates.notes = (patch.notes ?? "").trim();
 
     const db = adminDb();
     const ref = db.collection("users").doc(uid).collection("bills").doc(billId);
@@ -125,7 +135,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
     if (e instanceof Response) return e;
     return NextResponse.json(
       { error: e?.message || "Server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -151,7 +161,7 @@ export async function DELETE(req: NextRequest, ctx: RouteContext) {
     if (e instanceof Response) return e;
     return NextResponse.json(
       { error: e?.message || "Server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

@@ -13,7 +13,7 @@ export const runtime = "nodejs";
 
 function billDocToDTO(
   id: string,
-  data: FirebaseFirestore.DocumentData
+  data: FirebaseFirestore.DocumentData,
 ): BillDTO {
   const dueDate: Date =
     data.dueDate?.toDate?.() instanceof Date
@@ -39,6 +39,11 @@ function billDocToDTO(
     category,
     isSubscription: Boolean(data.isSubscription),
     paid: Boolean(data.paid),
+    paidAt: data.paidAt
+      ? data.paidAt.toDate?.()
+        ? data.paidAt.toDate().toISOString()
+        : new Date(data.paidAt).toISOString()
+      : null,
     vendor: typeof data.vendor === "string" ? data.vendor : "",
     notes: typeof data.notes === "string" ? data.notes : "",
     createdAt: createdAt?.toISOString(),
@@ -64,7 +69,7 @@ export async function GET(req: NextRequest) {
     if (e instanceof Response) return e;
     return NextResponse.json(
       { error: e?.message || "Server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -98,6 +103,7 @@ export async function POST(req: NextRequest) {
         category: input.category ?? "other",
         isSubscription: input.isSubscription,
         paid: input.paid,
+        paidAt: input.paid ? now : null,
         vendor: input.vendor ?? "",
         notes: input.notes ?? "",
         createdAt: now,
@@ -111,7 +117,7 @@ export async function POST(req: NextRequest) {
     if (e instanceof Response) return e;
     return NextResponse.json(
       { error: e?.message || "Server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
